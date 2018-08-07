@@ -96,7 +96,13 @@ namespace FLB_tool
 
         private void listBox1_SelectedIndexChanged(object sender, EventArgs e)
         {
-            try { pictureBox1.Image = sprites[(sender as ListBox).SelectedIndex]; } catch { };
+            try
+            {
+                pictureBox1.Image = sprites[(sender as ListBox).SelectedIndex];
+                width = (ushort)pictureBox1.Image.Width;
+                height = (ushort)pictureBox1.Image.Height;
+            }
+            catch { };
         }
 
         private void button1_Click(object sender, EventArgs e)
@@ -121,14 +127,14 @@ namespace FLB_tool
             }
             Image pngData = Image.FromFile(pngFilePath);
 
-            if(pngData.RawFormat != ImageFormat.Png || pngData.PixelFormat != PixelFormat.Format32bppArgb)
+            if(pngData.PixelFormat != PixelFormat.Format32bppArgb)
             {
                 MessageBox.Show("File you are trying to import is not either .PNG or is not 32 bit ARGB pixel format!");
                 return;
             }
             Bitmap bmp = new Bitmap(pngData);
             BitmapData bmpData = bmp.LockBits(new Rectangle(0, 0, bmp.Width, bmp.Height), ImageLockMode.ReadWrite, PixelFormat.Format32bppArgb);
-            byte[] buffer = new byte[bmpData.Height * bmpData.Width * bmpData.Stride];
+            byte[] buffer = new byte[bmpData.Height * bmpData.Width * 4];
             Marshal.Copy(bmpData.Scan0, buffer, 0, buffer.Length);
 
             if (pngData.Width != width || pngData.Height != height)
@@ -138,7 +144,7 @@ namespace FLB_tool
                 using (FileStream fs = new FileStream(lastOpenPath, FileMode.Open, FileAccess.ReadWrite))
                 using (BinaryWriter bw = new BinaryWriter(fs))
                 {
-                    fs.Seek((int)listBox1.SelectedValue+28, SeekOrigin.Begin);
+                    fs.Seek(int.Parse(listBox1.SelectedValue.ToString())+28, SeekOrigin.Begin);
                     bw.Write(buffer);
                 }
             }
