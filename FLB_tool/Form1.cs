@@ -23,6 +23,10 @@ namespace FLB_tool
         ushort width = 0;
         ushort height = 0;
 
+        uint SHCH;
+        uint SPCH;
+        uint BTCH;
+        uint ANCH0;
 
         public Form1()
         {
@@ -51,11 +55,18 @@ namespace FLB_tool
             if (Encoding.UTF8.GetString(br.ReadBytes(4), 0, 4) != "FLBD") { MessageBox.Show("Wrong or corrupted FLB file"); return; }
             fs.Seek(4, SeekOrigin.Current); //pass 0101
             imchPointer = br.ReadUInt32();
+
+            fs.Seek(12, SeekOrigin.Current);
+            SHCH = br.ReadUInt32();
+            SPCH = br.ReadUInt32();
+            BTCH = br.ReadUInt32();
+            ANCH0 = br.ReadUInt32();
+
             fs.Seek(imchPointer, SeekOrigin.Begin);
             if (Encoding.UTF8.GetString(br.ReadBytes(4), 0, 4) != "IMCH") { MessageBox.Show("Wrong or corrupted FLB file"); return; }
             uint imchSize = br.ReadUInt32();
             uint imchSpriteSize = br.ReadUInt32();
-            uint[] imchSpritePointers = new uint[imchSpriteSize];
+            imchSpritePointers = new uint[imchSpriteSize];
             sprites = new Bitmap[imchSpriteSize];
             for (int i = 0; i < imchSpriteSize; i++)
             {
@@ -138,7 +149,7 @@ namespace FLB_tool
             Marshal.Copy(bmpData.Scan0, buffer, 0, buffer.Length);
 
             if (pngData.Width != width || pngData.Height != height)
-                ReplaceDynamic(buffer);
+                ReplaceDynamic(buffer, (ushort)bmpData.Width, (ushort)bmpData.Height);
             else
             {
                 using (FileStream fs = new FileStream(lastOpenPath, FileMode.Open, FileAccess.ReadWrite))
@@ -157,9 +168,63 @@ namespace FLB_tool
 
         }
 
-        private void ReplaceDynamic(byte[] buffer)
+        private void ReplaceDynamic(byte[] buffer, ushort newWidth, ushort newHeight) //buffer is the import image data
         {
-            throw new NotImplementedException();
+            int pointerIndex = listBox1.SelectedIndex; //so we need to tweak all the pointers AFTER this one
+            uint oldBufferSize = (uint)(width * height * 4); //naturally
+            int bufferSizeDifference = (int)(buffer.Length - oldBufferSize); //when we import smaller image it naturally gets decreased
+            uint shchTweaked = (uint)(SHCH + bufferSizeDifference);
+            uint spchTweaked = (uint)(SPCH + bufferSizeDifference);
+            uint btchTweaked = (uint)(BTCH + bufferSizeDifference);
+            uint anch0Tweaked = (uint)(ANCH0 + bufferSizeDifference);
+
+
+            //phase 1. Replace SPCH... pointers
+            using (FileStream fs = new FileStream(lastOpenPath, FileMode.Open, FileAccess.ReadWrite))
+            using (BinaryWriter bw = new BinaryWriter(fs))
+            {
+                fs.Seek(0x18, SeekOrigin.Begin);
+                bw.Write(shchTweaked);
+                bw.Write(spchTweaked);
+                bw.Write(btchTweaked);
+                bw.Write(anch0Tweaked);
+
+                //phase 2. Get to sprite pointer and tweak height and width
+                fs.Seek(int.Parse(listBox1.SelectedValue.ToString()) + 24, SeekOrigin.Begin);
+                bw.Write(newWidth);
+                bw.Write(newHeight);                
+
+                //phase 3. Get to IMCH and tweak pointers from currentIndex+1 if available and add via bufferSizeDifference
+                fs.Seek(imchPointer+12, SeekOrigin.Begin);
+                fs.Seek(listBox1.SelectedIndex * 4, SeekOrigin.Current);
+                if (listBox1.SelectedIndex != listBox1.Items.Count-1) //some pointers need tweaking
+                {
+                    int maxListbox = listBox1.Items.Count - listBox1.SelectedIndex-1;
+                    fs.Seek(4, SeekOrigin.Current);
+                    for (int i = 0; i < maxListbox; i++)
+                        bw.Write((uint)(imchSpritePointers[listBox1.SelectedIndex + i+1] + bufferSizeDifference-120)); //-120 because IMCH header + FLBD header
+                }
+
+            }
+
+            //phase 4. Dump current-modified file and rebuild
+            byte[] fullBuffer = File.ReadAllBytes(lastOpenPath);
+            byte[] finalBuffer = new byte[fullBuffer.Length + bufferSizeDifference];
+            Buffer.BlockCopy(fullBuffer, 0, finalBuffer, 0, (int)imchSpritePointers[listBox1.SelectedIndex] + 28);
+            Buffer.BlockCopy(buffer, 0, finalBuffer, (int)imchSpritePointers[listBox1.SelectedIndex] + 28, buffer.Length);
+            if(imchSpritePointers.Length != 1) //more than one sprite
+            {
+                int dstOffset = (int)imchSpritePointers[listBox1.SelectedIndex] + 28 + buffer.Length;
+                int cnt = fullBuffer.Length - (int)imchSpritePointers[listBox1.SelectedIndex + 1];
+                Buffer.BlockCopy(fullBuffer, (int)imchSpritePointers[listBox1.SelectedIndex + 1], finalBuffer, dstOffset, cnt);
+            }
+            else
+            {
+                int dstOffset = (int)imchSpritePointers[listBox1.SelectedIndex] + buffer.Length;
+                int cnt = fullBuffer.Length - (int)SHCH;
+                Buffer.BlockCopy(fullBuffer, (int)SHCH, finalBuffer, dstOffset, cnt);
+            }
+            File.WriteAllBytes(lastOpenPath, finalBuffer);
         }
     }
 }
