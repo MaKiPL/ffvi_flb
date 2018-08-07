@@ -111,7 +111,7 @@ namespace FLB_tool
             using (SaveFileDialog sfd = new SaveFileDialog() { Filter = "PNG *.PNG|*.PNG", CheckPathExists = true })
             {
                 sfd.ShowDialog();
-                if(sfd.FileName != null)
+                if(!string.IsNullOrWhiteSpace(sfd.FileName))
                     pictureBox1.Image.Save(sfd.FileName, ImageFormat.Png);
             }
         }
@@ -145,7 +145,13 @@ namespace FLB_tool
                 using (BinaryWriter bw = new BinaryWriter(fs))
                 {
                     fs.Seek(int.Parse(listBox1.SelectedValue.ToString())+28, SeekOrigin.Begin);
-                    bw.Write(buffer);
+                    for (int i = 0; i < buffer.Length; i += 4)
+                    {
+                        bw.Write(buffer[i+3]);
+                        bw.Write(buffer[i + 2]);
+                        bw.Write(buffer[i + 1]);
+                        bw.Write(buffer[i+0]);
+                    }
                 }
             }
 
