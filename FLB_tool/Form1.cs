@@ -11,6 +11,14 @@ using System.Windows.Forms;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 
+/*
+ * Final Fantasy VI .FLB tool
+ * Made by Maki (Marcin Gomulak)
+ * Feel free to contact me on makipol@gmail.com
+ * See me on github.com/makipl
+ * 
+ */
+
 namespace FLB_tool
 {
     public partial class Form1 : Form
@@ -174,7 +182,7 @@ namespace FLB_tool
                     }
                 }
             }
-
+            MessageBox.Show("Replacing completed! Please pack the file to .gz or re-open the same file again to see changes.");
         }
 
         private void ReplaceDynamic(byte[] buffer, ushort newWidth, ushort newHeight) //buffer is the import image data
