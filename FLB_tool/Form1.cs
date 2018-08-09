@@ -122,8 +122,15 @@ namespace FLB_tool
             using (SaveFileDialog sfd = new SaveFileDialog() { Filter = "PNG *.PNG|*.PNG", CheckPathExists = true })
             {
                 sfd.ShowDialog();
-                if(!string.IsNullOrWhiteSpace(sfd.FileName))
-                    pictureBox1.Image.Save(sfd.FileName, ImageFormat.Png);
+                if (!string.IsNullOrWhiteSpace(sfd.FileName))
+                {
+                    if (File.Exists(sfd.FileName))
+                    {
+                        File.Delete(sfd.FileName);
+                        pictureBox1.Image.Save(sfd.FileName, ImageFormat.Png);
+                    }
+                    else pictureBox1.Image.Save(sfd.FileName, ImageFormat.Png);
+                }
             }
         }
 
@@ -147,6 +154,8 @@ namespace FLB_tool
             BitmapData bmpData = bmp.LockBits(new Rectangle(0, 0, bmp.Width, bmp.Height), ImageLockMode.ReadWrite, PixelFormat.Format32bppArgb);
             byte[] buffer = new byte[bmpData.Height * bmpData.Width * 4];
             Marshal.Copy(bmpData.Scan0, buffer, 0, buffer.Length);
+
+            bmp.UnlockBits(bmpData); //this unlocks png handle
 
             if (pngData.Width != width || pngData.Height != height)
                 ReplaceDynamic(buffer, (ushort)bmpData.Width, (ushort)bmpData.Height);
@@ -210,19 +219,37 @@ namespace FLB_tool
             //phase 4. Dump current-modified file and rebuild
             byte[] fullBuffer = File.ReadAllBytes(lastOpenPath);
             byte[] finalBuffer = new byte[fullBuffer.Length + bufferSizeDifference];
-            Buffer.BlockCopy(fullBuffer, 0, finalBuffer, 0, (int)imchSpritePointers[listBox1.SelectedIndex] + 28);
-            Buffer.BlockCopy(buffer, 0, finalBuffer, (int)imchSpritePointers[listBox1.SelectedIndex] + 28, buffer.Length);
+            int startCopyPointer = (int)imchSpritePointers[listBox1.SelectedIndex] + 28;
+            Buffer.BlockCopy(fullBuffer, 0, finalBuffer, 0, startCopyPointer);
+
+            for (int i = 0; i<buffer.Length; i+=4)
+            {
+                finalBuffer[startCopyPointer + i] = buffer[i+3];
+                finalBuffer[startCopyPointer + i+1] = buffer[i + 2];
+                finalBuffer[startCopyPointer + i+2] = buffer[i + 1];
+                finalBuffer[startCopyPointer + i+3] = buffer[i];
+            }
+
+
             if(imchSpritePointers.Length != 1) //more than one sprite
             {
                 int dstOffset = (int)imchSpritePointers[listBox1.SelectedIndex] + 28 + buffer.Length;
-                int cnt = fullBuffer.Length - (int)imchSpritePointers[listBox1.SelectedIndex + 1];
-                Buffer.BlockCopy(fullBuffer, (int)imchSpritePointers[listBox1.SelectedIndex + 1], finalBuffer, dstOffset, cnt);
+                if (listBox1.SelectedIndex != listBox1.Items.Count-1)
+                {
+                    int cnt = fullBuffer.Length - (int)imchSpritePointers[listBox1.SelectedIndex + 1];
+                    Buffer.BlockCopy(fullBuffer, (int)imchSpritePointers[listBox1.SelectedIndex + 1], finalBuffer, dstOffset, cnt);
+                }
+                else
+                {
+                    int cnt = fullBuffer.Length - (int)SHCH;
+                    Buffer.BlockCopy(fullBuffer, (int)SHCH, finalBuffer, dstOffset, cnt-40);
+                }
             }
             else
             {
                 int dstOffset = (int)imchSpritePointers[listBox1.SelectedIndex] + buffer.Length;
                 int cnt = fullBuffer.Length - (int)SHCH;
-                Buffer.BlockCopy(fullBuffer, (int)SHCH, finalBuffer, dstOffset, cnt);
+                Buffer.BlockCopy(fullBuffer, (int)SHCH, finalBuffer, dstOffset, cnt-12);
             }
             File.WriteAllBytes(lastOpenPath, finalBuffer);
         }
