@@ -124,7 +124,7 @@ namespace FLB_tool
 
             pictureBox2.Visible = true;
 
-            listBox1.DataSource = indices;
+            listBox1.DataSource = imchSpritePointers;
 
             button1.Enabled = true;
             button2.Enabled = true;
